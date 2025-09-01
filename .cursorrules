@@ -15,3 +15,17 @@ You are an AI coding assistant working in a Bun-based project.
 ## Project Context
 
 This is a TypeScript project using Bun runtime. The project was created with `bun init` and uses Bun's native TypeScript support.
+
+## A2A Library Reference
+
+For A2A (Agent-to-Agent) JavaScript SDK usage examples and code snippets, refer to the `a2a-reference.md` file in the project root. This file contains comprehensive examples including:
+
+- Installation and setup
+- Server configuration with Express
+- Client usage patterns
+- Agent card definitions
+- Agent executor implementations
+- Streaming task handling
+- API reference documentation
+
+When working with A2A functionality, consult the reference file for proper implementation patterns.
