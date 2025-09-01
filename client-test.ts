@@ -1,5 +1,11 @@
 import { A2AClient } from "@a2a-js/sdk/client";
-import type { MessageSendParams } from "@a2a-js/sdk";
+import type {
+  MessageSendParams,
+  Task,
+  TaskStatusUpdateEvent,
+  TaskArtifactUpdateEvent,
+  Message,
+} from "@a2a-js/sdk";
 import { v4 as uuidv4 } from "uuid";
 
 async function testHelloWorldAgent() {
@@ -123,8 +129,81 @@ async function testHelloWorldAgent() {
     }
 
     console.log("✅ Test completed successfully!");
+
+    // 5. 测试流式请求
+    console.log("\n🌊 --- Testing Stream Request ---");
+    await testStreamRequest(client);
+
   } catch (error) {
     console.error("💥 Test failed:", error);
+  }
+}
+
+// 流式请求测试函数
+async function testStreamRequest(client: A2AClient) {
+  try {
+    console.log("📡 Starting stream request...");
+
+    const messageId = uuidv4();
+    const streamParams: MessageSendParams = {
+      message: {
+        messageId: messageId,
+        role: "user",
+        parts: [{ kind: "text", text: "Stream this Hello World message!" }],
+        kind: "message",
+      },
+      configuration: {
+        acceptedOutputModes: ["text/plain"],
+      },
+    };
+
+    const stream = client.sendMessageStream(streamParams);
+    let eventCount = 0;
+
+    console.log("🎬 Stream started, listening for events...");
+
+    for await (const event of stream) {
+      eventCount++;
+      console.log(`📺 Event #${eventCount}:`, event.kind);
+
+      // 处理不同的流事件类型
+      if (event.kind === "task") {
+        const taskEvent = event as Task;
+        console.log(`📋 Task created: ${taskEvent.id}`);
+        console.log(`📊 Initial status: ${taskEvent.status.state}`);
+      } else if (event.kind === "status-update") {
+        const statusEvent = event as TaskStatusUpdateEvent;
+        console.log(`🔄 Status update: ${statusEvent.status.state}`);
+        if (statusEvent.status.message) {
+          const messageText = statusEvent.status.message.parts
+            .filter(part => part.kind === "text")
+            .map(part => part.text)
+            .join(" ");
+          console.log(`💬 Status message: ${messageText}`);
+        }
+        if (statusEvent.final) {
+          console.log(`🏁 Final status update received`);
+        }
+      } else if (event.kind === "artifact-update") {
+        const artifactEvent = event as TaskArtifactUpdateEvent;
+        console.log(`📦 Artifact update: ${artifactEvent.artifact.name || artifactEvent.artifact.artifactId}`);
+        console.log(`📊 Part count: ${artifactEvent.artifact.parts.length}`);
+      } else if (event.kind === "message") {
+        const messageEvent = event as Message;
+        const messageText = messageEvent.parts
+          .filter(part => part.kind === "text")
+          .map(part => part.text)
+          .join(" ");
+        console.log(`💬 Direct message: ${messageText}`);
+      } else {
+        console.log(`❓ Unknown event type:`, event);
+      }
+    }
+
+    console.log(`✅ Stream completed! Received ${eventCount} events`);
+
+  } catch (error) {
+    console.error("💥 Stream test failed:", error);
   }
 }
 
