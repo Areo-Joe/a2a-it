@@ -42,9 +42,36 @@ This will send a test message to the server and display the response.
 ### Server Features
 
 - ✅ **Clean Implementation**: Uses the correct A2AExpressApp from `@a2a-js/sdk/server/express`
-- ✅ **Simple Agent Logic**: Direct message responses without complex task management
-- ✅ **Proper Imports**: All TypeScript types imported correctly with verbatimModuleSyntax
+- ✅ **Random Response Types**: 50% chance for direct message, 50% chance for task-based workflow
+- ✅ **Task Management**: Complete task lifecycle (submitted → working → completed)
+- ✅ **Type Safety**: All TypeScript types imported correctly with verbatimModuleSyntax
 - ✅ **A2A Protocol Compliant**: Full compliance with A2A agent-to-agent communication
 - ✅ **No Lint Errors**: Clean code with proper TypeScript types
 
-The implementation is now much cleaner and follows the recommended A2A SDK patterns.
+### Response Types
+
+The server randomly demonstrates two A2A response patterns:
+
+#### **Direct Message Response** 📨
+- Immediate response without creating a task
+- Perfect for simple, instant interactions
+- Response format: `"Hello World! ... (Direct Response)"`
+
+#### **Task-Based Response** 📋
+- Creates an asynchronous task
+- Task goes through: `submitted` → `working` → `completed`
+- Simulates 1.5-second processing time
+- Client must poll for task completion
+- Response format: `"Hello World! ... (Task Completed)"`
+
+### Testing Multiple Times
+
+Run the client multiple times to see both response types:
+```bash
+# Run several times to see the random behavior
+bun run client-test.ts
+bun run client-test.ts
+bun run client-test.ts
+```
+
+The implementation now demonstrates the full spectrum of A2A communication patterns!

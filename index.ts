@@ -1,6 +1,11 @@
 import express from "express";
 import { v4 as uuidv4 } from "uuid";
-import type { AgentCard, Message } from "@a2a-js/sdk";
+import type {
+  AgentCard,
+  Message,
+  Task,
+  TaskStatusUpdateEvent,
+} from "@a2a-js/sdk";
 import {
   RequestContext,
   DefaultRequestHandler,
@@ -35,16 +40,40 @@ const helloWorldAgentCard: AgentCard = {
 
 // 2. Implement the agent's logic.
 class HelloWorldAgentExecutor implements AgentExecutor {
+  private activeTasks = new Set<string>();
+
   async execute(
     requestContext: RequestContext,
     eventBus: ExecutionEventBus
   ): Promise<void> {
-    // Get the user's message
     const userMessage = requestContext.userMessage;
     const userInput = userMessage.parts
       .filter((part) => part.kind === "text")
       .map((part) => part.text)
       .join(" ");
+
+    console.log(`[HelloWorldAgent] Processing: "${userInput}"`);
+
+    // 随机决定：50% 直接返回消息，50% 创建任务
+    const shouldCreateTask = Math.random() < 0.5;
+
+    if (shouldCreateTask) {
+      await this.handleAsTask(requestContext, eventBus);
+    } else {
+      await this.handleAsDirectMessage(requestContext, eventBus);
+    }
+  }
+
+  private async handleAsDirectMessage(
+    requestContext: RequestContext,
+    eventBus: ExecutionEventBus
+  ): Promise<void> {
+    const userInput = requestContext.userMessage.parts
+      .filter((part) => part.kind === "text")
+      .map((part) => part.text)
+      .join(" ");
+
+    console.log(`[HelloWorldAgent] 📨 Handling as direct message`);
 
     // Create a direct message response.
     const responseMessage: Message = {
@@ -54,24 +83,161 @@ class HelloWorldAgentExecutor implements AgentExecutor {
       parts: [
         {
           kind: "text",
-          text: `Hello World! I received your message: "${userInput}"`,
+          text: `Hello World! I received your message: "${userInput}" (Direct Response)`,
         },
       ],
-      // Associate the response with the incoming request's context.
       contextId: requestContext.contextId,
     };
-
-    console.log(`[HelloWorldAgent] Processing: "${userInput}"`);
 
     // Publish the message and signal that the interaction is finished.
     eventBus.publish(responseMessage);
     eventBus.finished();
 
-    console.log(`[HelloWorldAgent] Response sent`);
+    console.log(`[HelloWorldAgent] ✅ Direct message sent`);
   }
 
-  // cancelTask is not needed for this simple, non-stateful agent.
-  cancelTask = async (): Promise<void> => {};
+  private async handleAsTask(
+    requestContext: RequestContext,
+    eventBus: ExecutionEventBus
+  ): Promise<void> {
+    const userInput = requestContext.userMessage.parts
+      .filter((part) => part.kind === "text")
+      .map((part) => part.text)
+      .join(" ");
+
+    console.log(`[HelloWorldAgent] 📋 Handling as task`);
+
+    const taskId = requestContext.taskId;
+    const contextId = requestContext.contextId;
+
+    // Mark task as active
+    this.activeTasks.add(taskId);
+
+    // 1. Create and publish initial task
+    const initialTask: Task = {
+      kind: "task",
+      id: taskId,
+      contextId: contextId,
+      status: {
+        state: "submitted",
+        timestamp: new Date().toISOString(),
+      },
+      history: [requestContext.userMessage],
+      metadata: requestContext.userMessage.metadata,
+      artifacts: [],
+    };
+    eventBus.publish(initialTask);
+
+    // 2. Update to "working" status
+    const workingStatusUpdate: TaskStatusUpdateEvent = {
+      kind: "status-update",
+      taskId: taskId,
+      contextId: contextId,
+      status: {
+        state: "working",
+        message: {
+          kind: "message",
+          role: "agent",
+          messageId: uuidv4(),
+          parts: [
+            {
+              kind: "text",
+              text: "Starting to process your Hello World request...",
+            },
+          ],
+          taskId: taskId,
+          contextId: contextId,
+        },
+        timestamp: new Date().toISOString(),
+      },
+      final: false,
+    };
+    eventBus.publish(workingStatusUpdate);
+
+    // 3. Simulate processing with multiple stages
+    console.log(`[HelloWorldAgent] 🔄 Processing task ${taskId}...`);
+
+    // Stage 1: Initial processing (1 second)
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
+    // Update status to show progress
+    const progressUpdate: TaskStatusUpdateEvent = {
+      kind: "status-update",
+      taskId: taskId,
+      contextId: contextId,
+      status: {
+        state: "working",
+        message: {
+          kind: "message",
+          role: "agent",
+          messageId: uuidv4(),
+          parts: [{ kind: "text", text: "Processing your message..." }],
+          taskId: taskId,
+          contextId: contextId,
+        },
+        timestamp: new Date().toISOString(),
+      },
+      final: false,
+    };
+    eventBus.publish(progressUpdate);
+
+    // Stage 2: Final processing (1.5 seconds)
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+
+    // Check if task was cancelled
+    if (!this.activeTasks.has(taskId)) {
+      console.log(`[HelloWorldAgent] ❌ Task ${taskId} was cancelled`);
+      const cancelledUpdate: TaskStatusUpdateEvent = {
+        kind: "status-update",
+        taskId: taskId,
+        contextId: contextId,
+        status: {
+          state: "canceled",
+          timestamp: new Date().toISOString(),
+        },
+        final: true,
+      };
+      eventBus.publish(cancelledUpdate);
+      eventBus.finished();
+      return;
+    }
+
+    // 4. Complete the task
+    const completionStatusUpdate: TaskStatusUpdateEvent = {
+      kind: "status-update",
+      taskId: taskId,
+      contextId: contextId,
+      status: {
+        state: "completed",
+        message: {
+          kind: "message",
+          role: "agent",
+          messageId: uuidv4(),
+          parts: [
+            {
+              kind: "text",
+              text: `Hello World! I received your message: "${userInput}" (Task Completed)`,
+            },
+          ],
+          taskId: taskId,
+          contextId: contextId,
+        },
+        timestamp: new Date().toISOString(),
+      },
+      final: true,
+    };
+    eventBus.publish(completionStatusUpdate);
+    eventBus.finished();
+
+    // Clean up
+    this.activeTasks.delete(taskId);
+    console.log(`[HelloWorldAgent] ✅ Task ${taskId} completed`);
+  }
+
+  async cancelTask(taskId: string, eventBus: ExecutionEventBus): Promise<void> {
+    console.log(`[HelloWorldAgent] 🛑 Cancelling task: ${taskId}`);
+    this.activeTasks.delete(taskId);
+  }
 }
 
 // 3. Set up and run the server.
