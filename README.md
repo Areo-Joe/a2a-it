@@ -53,11 +53,13 @@ This will send a test message to the server and display the response.
 The server randomly demonstrates two A2A response patterns:
 
 #### **Direct Message Response** 📨
+
 - Immediate response without creating a task
 - Perfect for simple, instant interactions
 - Response format: `"Hello World! ... (Direct Response)"`
 
 #### **Task-Based Response** 📋
+
 - Creates an asynchronous task
 - Task goes through: `submitted` → `working` → `completed`
 - Simulates 1.5-second processing time
@@ -67,6 +69,7 @@ The server randomly demonstrates two A2A response patterns:
 ### Testing Multiple Times
 
 Run the client multiple times to see both response types:
+
 ```bash
 # Run several times to see the random behavior
 bun run client-test.ts
