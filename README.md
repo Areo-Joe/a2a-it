@@ -2,7 +2,7 @@
 
 I am exploring ways to build **Agent Applications**, especially paying attention to **Human-In-The-Loop**.
 
-I built this project to find out how HITL can be implemented with **A2A Protocol**. Generally it is done by sending HITL related info withing `DataPart`.
+I built this project to find out how HITL can be implemented with **A2A Protocol**. Generally it is done by sending HITL related info within `DataPart`.
 
 There are very few examples of A2A servers in the community, which makes it difficult to find examples of A2A servers with HITL features. In particular, the A2A protocol intentionally does not specify information related to tool calling, making it a black box.
 
