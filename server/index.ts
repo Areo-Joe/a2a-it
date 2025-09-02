@@ -20,6 +20,7 @@ import { generateText, streamText, type ModelMessage } from "ai";
 import { zhiPuAI } from "./ai";
 import z from "zod";
 import { extractText, log } from "./util";
+import cors from "cors";
 
 interface ToolCall {
   input: unknown;
@@ -374,7 +375,7 @@ const requestHandler = new DefaultRequestHandler(
 );
 
 const appBuilder = new A2AExpressApp(requestHandler);
-const expressApp = appBuilder.setupRoutes(express());
+const expressApp = appBuilder.setupRoutes(express(), "", [cors()]);
 
 expressApp.listen(3000, () => {
   log.log(`🚀 Weather A2A Server started on http://localhost:3000`);
