@@ -2,8 +2,10 @@ import express from "express";
 import { v4 as uuidv4 } from "uuid";
 import type {
   AgentCard,
+  DataPart,
   Message,
   Task,
+  TaskArtifactUpdateEvent,
   TaskStatusUpdateEvent,
 } from "@a2a-js/sdk";
 import {
@@ -13,9 +15,10 @@ import {
 } from "@a2a-js/sdk/server";
 import type { AgentExecutor, ExecutionEventBus } from "@a2a-js/sdk/server";
 import { A2AExpressApp } from "@a2a-js/sdk/server/express";
-import { isWeatherQuery } from "./weather";
-import { generateText } from "ai";
+import { getWeather, isWeatherQuery } from "./weather";
+import { generateText, streamText, type ModelMessage } from "ai";
 import { zhiPuAI } from "./ai";
+import z from "zod";
 
 // 1. Define your agent's identity card.
 const helloWorldAgentCard: AgentCard = {
@@ -49,6 +52,11 @@ class HelloWorldAgentExecutor implements AgentExecutor {
     requestContext: RequestContext,
     eventBus: ExecutionEventBus
   ): Promise<void> {
+    if (requestContext.task) {
+      await this.handleAsExistingTask(requestContext, eventBus);
+      return;
+    }
+
     const userMessage = requestContext.userMessage;
     const userInput = userMessage.parts
       .filter((part) => part.kind === "text")
@@ -116,131 +124,268 @@ class HelloWorldAgentExecutor implements AgentExecutor {
 
     console.log(`[HelloWorldAgent] 📋 Handling as task`);
 
-    const taskId = requestContext.taskId;
-    const contextId = requestContext.contextId;
-
-    // Mark task as active
-    this.activeTasks.add(taskId);
+    const { contextId, taskId } = requestContext;
 
     // 1. Create and publish initial task
     const initialTask: Task = {
       kind: "task",
       id: taskId,
-      contextId: contextId,
+      contextId,
       status: {
         state: "submitted",
         timestamp: new Date().toISOString(),
       },
       history: [requestContext.userMessage],
-      metadata: requestContext.userMessage.metadata,
-      artifacts: [],
     };
     eventBus.publish(initialTask);
 
-    // 2. Update to "working" status
-    const workingStatusUpdate: TaskStatusUpdateEvent = {
-      kind: "status-update",
-      taskId: taskId,
-      contextId: contextId,
-      status: {
-        state: "working",
-        message: {
-          kind: "message",
-          role: "agent",
-          messageId: uuidv4(),
-          parts: [
-            {
-              kind: "text",
-              text: "Starting to process your Hello World request...",
-            },
-          ],
-          taskId: taskId,
-          contextId: contextId,
+    const stream = streamText({
+      model: zhiPuAI("glm-4.5"),
+      prompt: userInput,
+      tools: {
+        getWeather: {
+          name: "getWeather",
+          inputSchema: z.object({
+            city: z.string(),
+          }),
+          description: "获取指定城市的天气信息",
         },
-        timestamp: new Date().toISOString(),
       },
-      final: false,
-    };
-    eventBus.publish(workingStatusUpdate);
+    });
 
-    // 3. Simulate processing with multiple stages
-    console.log(`[HelloWorldAgent] 🔄 Processing task ${taskId}...`);
+    const artifactId = uuidv4();
 
-    // Stage 1: Initial processing (1 second)
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    const awaitedToolCalls: Array<{
+      input: unknown;
+      toolCallId: string;
+      toolName: string;
+    }> = [];
 
-    // Update status to show progress
-    const progressUpdate: TaskStatusUpdateEvent = {
-      kind: "status-update",
-      taskId: taskId,
-      contextId: contextId,
-      status: {
-        state: "working",
-        message: {
-          kind: "message",
-          role: "agent",
-          messageId: uuidv4(),
-          parts: [{ kind: "text", text: "Processing your message..." }],
-          taskId: taskId,
-          contextId: contextId,
-        },
-        timestamp: new Date().toISOString(),
-      },
-      final: false,
-    };
-    eventBus.publish(progressUpdate);
+    for await (let chunk of stream.fullStream) {
+      if (chunk.type === "text-delta") {
+        const artifactUpdate: TaskArtifactUpdateEvent = {
+          contextId,
+          taskId,
+          kind: "artifact-update",
+          artifact: {
+            artifactId,
+            parts: [{ kind: "text", text: chunk.text }],
+          },
+        };
+        eventBus.publish(artifactUpdate);
+      }
 
-    // Stage 2: Final processing (1.5 seconds)
-    await new Promise((resolve) => setTimeout(resolve, 1500));
+      if (chunk.type === "tool-call") {
+        const { input, toolCallId, toolName } = chunk;
+        awaitedToolCalls.push({ input, toolCallId, toolName });
+      }
+    }
 
-    // Check if task was cancelled
-    if (!this.activeTasks.has(taskId)) {
-      console.log(`[HelloWorldAgent] ❌ Task ${taskId} was cancelled`);
-      const cancelledUpdate: TaskStatusUpdateEvent = {
+    if (awaitedToolCalls.length === 0) {
+      const statusUpdate: TaskStatusUpdateEvent = {
         kind: "status-update",
-        taskId: taskId,
-        contextId: contextId,
+        taskId,
+        contextId,
         status: {
-          state: "canceled",
-          timestamp: new Date().toISOString(),
+          state: "completed",
         },
         final: true,
       };
-      eventBus.publish(cancelledUpdate);
-      eventBus.finished();
-      return;
+
+      eventBus.publish(statusUpdate);
+    } else {
+      const statusUpdate: TaskStatusUpdateEvent = {
+        contextId,
+        taskId,
+        kind: "status-update",
+        status: {
+          state: "input-required",
+          message: {
+            kind: "message",
+            messageId: uuidv4(),
+            role: "agent",
+            parts: [
+              {
+                kind: "data",
+                data: {
+                  awaitedToolCalls,
+                },
+              },
+            ],
+          },
+        },
+        final: true,
+      };
+      eventBus.publish(statusUpdate);
     }
 
-    // 4. Complete the task
-    const completionStatusUpdate: TaskStatusUpdateEvent = {
-      kind: "status-update",
-      taskId: taskId,
-      contextId: contextId,
-      status: {
-        state: "completed",
-        message: {
-          kind: "message",
-          role: "agent",
-          messageId: uuidv4(),
-          parts: [
+    console.log(`[HelloWorldAgent] ✅ Task ${taskId} completed`);
+  }
+
+  private async handleAsExistingTask(
+    requestContext: RequestContext,
+    eventBus: ExecutionEventBus
+  ) {
+    const task = requestContext.task!;
+    const { taskId, contextId } = requestContext;
+
+    const userConfirmSchema = z.object({
+      allowedToolCalls: z.array(z.string()),
+    });
+
+    const { allowedToolCalls } = userConfirmSchema.parse(
+      (requestContext.userMessage.parts[0] as DataPart).data
+    );
+
+    const { awaitedToolCalls } = (task.status.message!.parts[0] as DataPart)
+      .data as {
+      awaitedToolCalls: {
+        input: unknown;
+        toolCallId: string;
+        toolName: string;
+      }[];
+    };
+
+    const stillAwaited = awaitedToolCalls.filter(
+      (x) => !allowedToolCalls.includes(x.toolCallId)
+    );
+    const called = awaitedToolCalls
+      .filter((x) => allowedToolCalls.includes(x.toolCallId))
+      .map((x) => ({
+        ...x,
+        result: getWeather((x as unknown as { city: string }).city),
+      }));
+
+    if (stillAwaited.length === 0) {
+      const workingStatusUpdate: TaskStatusUpdateEvent = {
+        kind: "status-update",
+        taskId,
+        contextId,
+        status: {
+          state: "working",
+          message: {
+            kind: "message",
+            messageId: uuidv4(),
+            role: "agent",
+            parts: [
+              {
+                kind: "data",
+                data: {
+                  awaitedToolCalls: [],
+                  executedToolCalls: called,
+                },
+              },
+            ],
+          },
+        },
+        final: false,
+      };
+
+      eventBus.publish(workingStatusUpdate);
+
+      const toolCallMessages = called.flatMap<ModelMessage>((x) => [
+        {
+          role: "assistant",
+          content: [
             {
-              kind: "text",
-              text: `Hello World! I received your message: "${userInput}" (Task Completed)`,
+              type: "tool-call",
+              toolCallId: x.toolCallId,
+              input: x.input,
+              toolName: x.toolName,
             },
           ],
-          taskId: taskId,
-          contextId: contextId,
         },
-        timestamp: new Date().toISOString(),
-      },
-      final: true,
-    };
-    eventBus.publish(completionStatusUpdate);
-    eventBus.finished();
+        {
+          role: "tool",
+          content: [
+            {
+              type: "tool-result",
+              output: { type: "text", value: x.result },
+              toolCallId: x.toolCallId,
+              toolName: x.toolName,
+            },
+          ],
+        },
+      ]);
 
-    // Clean up
-    this.activeTasks.delete(taskId);
-    console.log(`[HelloWorldAgent] ✅ Task ${taskId} completed`);
+      const messages: ModelMessage[] = [
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: task
+                .history![0]!.parts.filter((x) => x.kind === "text")
+                .map((x) => x.text)
+                .join(" "),
+            },
+          ],
+        },
+        ...toolCallMessages,
+      ];
+
+      console.log(`Message ${JSON.stringify(messages, null, 2)}`);
+
+      const stream = streamText({
+        model: zhiPuAI("glm-4.5"),
+        messages,
+      });
+
+      const artifactId = uuidv4();
+
+      for await (const chunk of stream.fullStream) {
+        if (chunk.type === "text-delta") {
+          const artifactUpdate: TaskArtifactUpdateEvent = {
+            contextId,
+            taskId,
+            kind: "artifact-update",
+            artifact: {
+              artifactId,
+              parts: [{ kind: "text", text: chunk.text }],
+            },
+          };
+          eventBus.publish(artifactUpdate);
+        }
+      }
+
+      const completedStatusUpdate: TaskStatusUpdateEvent = {
+        kind: "status-update",
+        taskId,
+        contextId,
+        status: {
+          state: "completed",
+        },
+        final: true,
+      };
+
+      eventBus.publish(completedStatusUpdate);
+    } else {
+      const statusUpdate: TaskStatusUpdateEvent = {
+        kind: "status-update",
+        taskId,
+        contextId,
+        status: {
+          state: "input-required",
+          message: {
+            kind: "message",
+            messageId: uuidv4(),
+            role: "agent",
+            parts: [
+              {
+                kind: "data",
+                data: {
+                  executedToolCalls: called,
+                  awaitedToolCalls: stillAwaited,
+                },
+              },
+            ],
+          },
+        },
+        final: true,
+      };
+
+      eventBus.publish(statusUpdate);
+    }
   }
 
   async cancelTask(taskId: string, eventBus: ExecutionEventBus): Promise<void> {
