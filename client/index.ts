@@ -1,12 +1,5 @@
 import { A2AClient } from "@a2a-js/sdk/client";
-import type {
-  MessageSendParams,
-  Task,
-  TaskStatusUpdateEvent,
-  TaskArtifactUpdateEvent,
-  Message,
-  DataPart,
-} from "@a2a-js/sdk";
+import type { MessageSendParams, Message, DataPart } from "@a2a-js/sdk";
 import { v4 as uuidv4 } from "uuid";
 
 interface AwaitedToolCall {
@@ -44,12 +37,12 @@ async function askWeather() {
 
   const stream = client.sendMessageStream(streamParams);
   let eventCount = 0;
+  const artifacts: Record<string, string> = {};
 
-  console.log("🎬 Stream started, listening for events...");
+  console.log("Start streaming...");
 
   for await (const event of stream) {
     eventCount++;
-    console.log(`📺 Event #${eventCount}:`, event.kind);
 
     // 处理不同的流事件类型
     if (event.kind === "task") {
@@ -59,12 +52,7 @@ async function askWeather() {
       taskStatus = taskEvent.status.state;
     } else if (event.kind === "status-update") {
       const statusEvent = event;
-      console.log(`🔄 Status update: ${statusEvent.status.state}`);
       taskStatus = statusEvent.status.state;
-      if (statusEvent.status.message) {
-        const messageText = JSON.stringify(statusEvent.status.message, null, 2);
-        console.log(`💬 Status message: ${messageText}`);
-      }
 
       if (taskStatus === "input-required") {
         awaitedToolCalls = (
@@ -77,12 +65,14 @@ async function askWeather() {
       }
     } else if (event.kind === "artifact-update") {
       const artifactEvent = event;
-      console.log(
-        `📦 Artifact update: ${
-          artifactEvent.artifact.name || artifactEvent.artifact.artifactId
-        }`
-      );
-      console.log(`📊 Part count: ${artifactEvent.artifact.parts.length}`);
+      const delta = artifactEvent.artifact.parts
+        .filter((x) => x.kind === "text")
+        .map((x) => x.text)
+        .join("");
+
+      artifacts[artifactEvent.artifact.artifactId] = artifactEvent.append
+        ? (artifacts[artifactEvent.artifact.artifactId] ?? "") + delta
+        : delta;
     } else if (event.kind === "message") {
       const messageEvent = event as Message;
       const messageText = messageEvent.parts
@@ -94,6 +84,11 @@ async function askWeather() {
       console.log(`❓ Unknown event type:`, event);
     }
   }
+
+  console.log(`🎉 Artifacts: ${JSON.stringify(artifacts, null, 2)}`);
+  console.log(
+    `🔄 Awaited tool calls: ${JSON.stringify(awaitedToolCalls, null, 2)}`
+  );
 
   return {
     contextId,
@@ -111,6 +106,7 @@ async function allowToolCall({
   taskId: string;
   awaitedToolCalls: AwaitedToolCall[];
 }) {
+  console.log("Starting a new stream to allow tool calls");
   const messageId = uuidv4();
   const streamParams: MessageSendParams = {
     message: {
@@ -130,7 +126,21 @@ async function allowToolCall({
 
   const stream = client.sendMessageStream(streamParams);
 
+  const artifacts: Record<string, string> = {};
+
   for await (const event of stream) {
-    console.log(JSON.stringify(event, null, 2));
+    if (event.kind === "artifact-update") {
+      const artifactEvent = event;
+      const delta = artifactEvent.artifact.parts
+        .filter((x) => x.kind === "text")
+        .map((x) => x.text)
+        .join("");
+
+      artifacts[artifactEvent.artifact.artifactId] = artifactEvent.append
+        ? (artifacts[artifactEvent.artifact.artifactId] ?? "") + delta
+        : delta;
+    }
   }
+
+  console.log(`🎉 Artifacts: ${JSON.stringify(artifacts, null, 2)}`);
 }

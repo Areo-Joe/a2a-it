@@ -19,6 +19,7 @@ import { getWeather, isWeatherQuery } from "./weather";
 import { generateText, streamText, type ModelMessage } from "ai";
 import { zhiPuAI } from "./ai";
 import z from "zod";
+import { extractText, log } from "./util";
 
 interface ToolCall {
   input: unknown;
@@ -29,18 +30,6 @@ interface ToolCall {
 const allowedToolCallsSchema = z.object({
   allowedToolCalls: z.array(z.string()),
 });
-
-const log = {
-  info: (...args: any[]) => {
-    console.info("[WeatherAgent]", ...args);
-  },
-  error: (...args: any[]) => {
-    console.error("[WeatherAgent]", ...args);
-  },
-  log: (...args: any[]) => {
-    console.log("[WeatherAgent]", ...args);
-  },
-};
 
 const weatherAgentCard: AgentCard = {
   name: "Weather Agent",
@@ -161,6 +150,7 @@ class WeatherAgentExecutor implements AgentExecutor {
             artifactId,
             parts: [{ kind: "text", text: chunk.text }],
           },
+          append: true,
         };
         eventBus.publish(artifactUpdate);
       }
@@ -323,6 +313,7 @@ class WeatherAgentExecutor implements AgentExecutor {
               artifactId,
               parts: [{ kind: "text", text: chunk.text }],
             },
+            append: true,
           };
           eventBus.publish(artifactUpdate);
         }
@@ -390,10 +381,3 @@ expressApp.listen(3000, () => {
   log.log(`📋 Agent Card: http://localhost:3000/.well-known/agent-card.json`);
   log.log(`🛑 Press Ctrl+C to stop the server`);
 });
-
-function extractText(requestContext: RequestContext) {
-  return requestContext.userMessage.parts
-    .filter((part) => part.kind === "text")
-    .map((part) => part.text)
-    .join("");
-}
