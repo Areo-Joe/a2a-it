@@ -1,6 +1,14 @@
 # a2a-it
 
-A sophisticated **Agent-to-Agent (A2A)** weather assistant implementation built with TypeScript, featuring AI-powered conversation, tool calling, and streaming responses. This project demonstrates the full capabilities of the A2A protocol for building collaborative AI agents.
+I am exploring ways to build **Agent Applications**, especially paying attention to **Human-In-The-Loop**.
+
+I built this project to find out how HITL can be implemented with **A2A Protocol**. Generally it is done by sending HITL related info withing `DataPart`.
+
+There are very few examples of A2A servers in the community, which makes it difficult to find examples of A2A servers with HITL features. In particular, the A2A protocol intentionally does not specify information related to tool calling, making it a black box.
+
+Therefore, I don't know if my implementation fully aligns with the original design intent of the protocol. If my implementation is correct, the next step should be to abstract this paradigm into an Extension.
+
+Any feedback is welcome.
 
 ## ✨ Features
 
@@ -80,7 +88,44 @@ This will:
 
 ## 🎯 How It Works
 
-### 1. Query Detection
+### System Architecture Flow
+
+```mermaid
+flowchart TD
+    A[User Message] --> B[AI Query Detection]
+    B --> C{Weather Query?}
+
+    C -->|No| D[Direct Message Response]
+    D --> E[Stream Response]
+    E --> F[End]
+
+    C -->|Yes| G[Create Task]
+    G --> H[Task State: Submitted]
+    H --> I[Stream Task Status]
+    I --> J[AI Generates Response with Tool Calls]
+    J --> K[Task State: Input Required]
+    K --> L[Stream Tool Call Request]
+    L --> M{User Approves?}
+
+    M -->|Yes| P[Execute Weather Tool]
+    P --> Q[Task State: Working]
+    Q --> R[AI Processes Results]
+    R --> S[Stream Final Response]
+    S --> T[Task State: Completed]
+    T --> U[End]
+
+    style A fill:#e1f5fe
+    style B fill:#fff3e0
+    style C fill:#fff3e0
+    style G fill:#c8e6c9
+    style P fill:#c8e6c9
+    style D fill:#f3e5f5
+    style T fill:#c8e6c9
+```
+
+### Workflow Breakdown
+
+#### 1. Query Detection
 
 The agent uses AI to intelligently detect whether a user message is weather-related:
 
@@ -92,22 +137,33 @@ The agent uses AI to intelligently detect whether a user message is weather-rela
 // → Detected as non-weather → Direct response
 ```
 
-### 2. Tool Call Workflow
+#### 2. **Direct Message Path** 📨
 
-For weather queries, the agent:
+For non-weather queries, the agent responds immediately:
 
-1. **Detects Intent**: Uses AI to classify the query
-2. **Requests Permission**: Asks user to approve tool calls
-3. **Executes Tools**: Calls weather API with approved parameters
-4. **Generates Response**: Uses AI to format weather data into natural language
+- Uses AI to generate a contextual response
+- Streams the response in real-time
+- No task creation required
 
-### 3. Streaming Responses
+#### 3. **Task-Based Path** 📋
+
+For weather queries, the agent follows a structured workflow:
+
+1. **Task Creation**: Creates an asynchronous task with unique ID
+2. **Status Streaming**: Updates task state (`submitted` → `working` → `completed`)
+3. **Tool Call Request**: AI requests permission to execute weather tool
+4. **User Approval**: Waits for user to approve/reject tool calls
+5. **Tool Execution**: Calls weather API with approved parameters
+6. **Response Generation**: AI formats weather data into natural language
+
+#### 4. **Streaming Throughout** 📡
 
 The system supports real-time streaming of:
 
 - **Task Status Updates**: `submitted` → `working` → `completed`
 - **Artifact Updates**: Incremental text generation
 - **Tool Call Events**: Real-time tool execution tracking
+- **Direct Messages**: Immediate response streaming
 
 ## 📡 A2A Protocol Features
 
