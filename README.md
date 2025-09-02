@@ -1,78 +1,220 @@
 # a2a-it
 
-To install dependencies:
+A sophisticated **Agent-to-Agent (A2A)** weather assistant implementation built with TypeScript, featuring AI-powered conversation, tool calling, and streaming responses. This project demonstrates the full capabilities of the A2A protocol for building collaborative AI agents.
+
+## ✨ Features
+
+- 🤖 **AI-Powered Agent**: Uses ZhiPu AI (GLM-4.5) for intelligent conversation and weather query detection
+- 🔧 **Tool Calling**: Advanced tool call handling with user approval workflow
+- 📡 **Streaming Responses**: Real-time streaming of agent responses and task updates
+- 🎯 **Smart Query Detection**: Automatically detects weather-related queries using AI
+- 📋 **Task Management**: Complete task lifecycle management (submitted → working → completed)
+- 🛠️ **Type Safety**: Full TypeScript support with proper type checking
+- ⚡ **Fast Runtime**: Built with Bun for optimal performance
+- 🔄 **A2A Compliant**: Fully compliant with the Agent-to-Agent protocol specification
+
+## 🚀 Quick Start
+
+### Prerequisites
+
+- [Bun](https://bun.sh) runtime
+- OpenAI API key (for ZhiPu AI integration)
+
+### Installation
 
 ```bash
+# Clone the repository
+git clone <repository-url>
+cd a2a-it
+
+# Install dependencies
 bun install
+
+# Set up environment variables
+export OPENAI_API_KEY="your-openai-api-key-here"
 ```
-
-To run:
-
-```bash
-bun run index.ts
-```
-
-This project was created using `bun init` in bun v1.2.8. [Bun](https://bun.sh) is a fast all-in-one JavaScript runtime.
-
-## Hello World A2A Server
-
-This project contains a simple Hello World A2A (Agent-to-Agent) server implementation.
 
 ### Running the Server
 
 ```bash
-bun run index.ts
+# Start the weather agent server
+bun run s
 ```
 
-The server will start on `http://localhost:3000` and provide:
+The server will start on `http://localhost:3000` with:
 
-- Agent Card endpoint: `http://localhost:3000/.well-known/agent.json`
-- Message handling endpoint for A2A communication
+- 🌐 **Agent Card**: `http://localhost:3000/.well-known/agent-card.json`
+- 📡 **A2A Endpoints**: Full A2A protocol support
+- 📝 **Logs**: Real-time server activity logging
 
-### Testing the Server
-
-Run the test client:
+### Testing with Client
 
 ```bash
-bun run client-test.ts
+# Run the test client (in a separate terminal)
+bun run c
 ```
 
-This will send a test message to the server and display the response.
+This will:
 
-### Server Features
+1. Connect to the weather agent
+2. Send a weather query ("weather of shenzhen?")
+3. Handle tool call approval workflow
+4. Stream and display responses
 
-- ✅ **Clean Implementation**: Uses the correct A2AExpressApp from `@a2a-js/sdk/server/express`
-- ✅ **Random Response Types**: 50% chance for direct message, 50% chance for task-based workflow
-- ✅ **Task Management**: Complete task lifecycle (submitted → working → completed)
-- ✅ **Type Safety**: All TypeScript types imported correctly with verbatimModuleSyntax
-- ✅ **A2A Protocol Compliant**: Full compliance with A2A agent-to-agent communication
-- ✅ **No Lint Errors**: Clean code with proper TypeScript types
+## 🏗️ Architecture
 
-### Response Types
+### Server Components
 
-The server randomly demonstrates two A2A response patterns:
+- **`server/index.ts`**: Main server setup with Express and A2A integration
+- **`server/ai.ts`**: ZhiPu AI configuration and model setup
+- **`server/weather.ts`**: Weather query detection and data simulation
+- **`server/util.ts`**: Utility functions for text extraction and logging
 
-#### **Direct Message Response** 📨
+### Client Components
 
-- Immediate response without creating a task
-- Perfect for simple, instant interactions
-- Response format: `"Hello World! ... (Direct Response)"`
+- **`client/index.ts`**: A2A client implementation demonstrating:
+  - Agent discovery via agent card
+  - Streaming message handling
+  - Tool call approval workflow
+  - Event processing (tasks, status updates, artifacts)
 
-#### **Task-Based Response** 📋
+## 🎯 How It Works
 
-- Creates an asynchronous task
-- Task goes through: `submitted` → `working` → `completed`
-- Simulates 1.5-second processing time
-- Client must poll for task completion
-- Response format: `"Hello World! ... (Task Completed)"`
+### 1. Query Detection
 
-### Testing Multiple Times
+The agent uses AI to intelligently detect whether a user message is weather-related:
 
-Run the client multiple times to see both response types:
+```typescript
+// Example: "What's the weather like in Tokyo today?"
+// → Detected as weather query → Creates task with tool calling
+
+// Example: "Tell me a joke"
+// → Detected as non-weather → Direct response
+```
+
+### 2. Tool Call Workflow
+
+For weather queries, the agent:
+
+1. **Detects Intent**: Uses AI to classify the query
+2. **Requests Permission**: Asks user to approve tool calls
+3. **Executes Tools**: Calls weather API with approved parameters
+4. **Generates Response**: Uses AI to format weather data into natural language
+
+### 3. Streaming Responses
+
+The system supports real-time streaming of:
+
+- **Task Status Updates**: `submitted` → `working` → `completed`
+- **Artifact Updates**: Incremental text generation
+- **Tool Call Events**: Real-time tool execution tracking
+
+## 📡 A2A Protocol Features
+
+### Agent Card
+
+```json
+{
+  "name": "Weather Agent",
+  "description": "A simple agent that responds with weather messages.",
+  "protocolVersion": "0.3.0",
+  "capabilities": {
+    "streaming": true,
+    "pushNotifications": false,
+    "stateTransitionHistory": true
+  },
+  "skills": [{
+    "id": "weather",
+    "name": "Weather Response",
+    "description": "Responds with weather to any message"
+  }]
+}
+```
+
+### Message Types
+
+- **Direct Messages**: Immediate responses for simple queries
+- **Task-Based Messages**: Asynchronous processing with tool calling
+- **Streaming Events**: Real-time updates during task execution
+
+## 🛠️ Development
+
+### Available Scripts
 
 ```bash
-# Run several times to see the random behavior
-bun run client-test.ts
-bun run client-test.ts
-bun run client-test.ts
+# Start server
+bun run s
+
+# Run client
+bun run c
+
+# Development mode
+bun --hot server/index.ts
 ```
+
+### Project Structure
+
+```bash
+a2a-it/
+├── server/
+│   ├── index.ts      # Main server application
+│   ├── ai.ts         # AI model configuration
+│   ├── weather.ts    # Weather logic and tool calls
+│   └── util.ts       # Utility functions
+├── client/
+│   └── index.ts      # A2A client implementation
+├── package.json
+├── tsconfig.json
+└── README.md
+```
+
+## 🔧 Configuration
+
+### Environment Variables
+
+```bash
+# Required: OpenAI API key for ZhiPu AI
+export OPENAI_API_KEY="your-api-key-here"
+
+# Optional: Server port (default: 3000)
+export PORT=3000
+```
+
+### AI Model Configuration
+
+The project uses ZhiPu AI's GLM-4.5 model via OpenAI-compatible API:
+
+- **Model**: `glm-4.5`
+- **Endpoint**: `https://open.bigmodel.cn/api/paas/v4/`
+- **Features**: Tool calling, streaming, text generation
+
+## 📚 A2A Protocol Reference
+
+This project serves as a comprehensive example of A2A protocol implementation. Key concepts demonstrated:
+
+- **Agent Discovery**: Agent cards for capability advertisement
+- **Task Management**: Stateful task processing with lifecycle management
+- **Streaming**: Server-Sent Events for real-time updates
+- **Tool Calling**: Secure tool execution with user approval
+- **Message Exchange**: Structured communication between agents
+
+For detailed A2A protocol documentation, see: [`a2a-reference.md`](./a2a-reference.md)
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature/your-feature`
+3. Make your changes
+4. Test thoroughly with both server and client
+5. Submit a pull request
+
+## 📄 License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## 🙏 Acknowledgments
+
+- [A2A Protocol](https://github.com/a2aproject/A2A) - The foundation for agent-to-agent communication
+- [ZhiPu AI](https://open.bigmodel.cn/) - AI model provider
+- [Bun](https://bun.sh) - Fast JavaScript runtime
+- [@a2a-js/sdk](https://www.npmjs.com/package/@a2a-js/sdk) - A2A JavaScript SDK
