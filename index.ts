@@ -13,6 +13,9 @@ import {
 } from "@a2a-js/sdk/server";
 import type { AgentExecutor, ExecutionEventBus } from "@a2a-js/sdk/server";
 import { A2AExpressApp } from "@a2a-js/sdk/server/express";
+import { isWeatherQuery } from "./weather";
+import { generateText } from "ai";
+import { zhiPuAI } from "./ai";
 
 // 1. Define your agent's identity card.
 const helloWorldAgentCard: AgentCard = {
@@ -54,12 +57,11 @@ class HelloWorldAgentExecutor implements AgentExecutor {
 
     console.log(`[HelloWorldAgent] Processing: "${userInput}"`);
 
-    // 随机决定：50% 直接返回消息，50% 创建任务
-    const shouldCreateTask = Math.random() < 0.5;
-
-    if (shouldCreateTask) {
+    if (await isWeatherQuery(userInput)) {
+      // if is weather query, create a task
       await this.handleAsTask(requestContext, eventBus);
     } else {
+      // if not weather query, send a direct message
       await this.handleAsDirectMessage(requestContext, eventBus);
     }
   }
@@ -75,6 +77,13 @@ class HelloWorldAgentExecutor implements AgentExecutor {
 
     console.log(`[HelloWorldAgent] 📨 Handling as direct message`);
 
+    const { text } = await generateText({
+      model: zhiPuAI("glm-4.5"),
+      system:
+        "你是一个天气助手，现在用户说了一句无关的话，你需要指导用户问你天气相关的问题",
+      prompt: userInput,
+    });
+
     // Create a direct message response.
     const responseMessage: Message = {
       kind: "message",
@@ -83,7 +92,7 @@ class HelloWorldAgentExecutor implements AgentExecutor {
       parts: [
         {
           kind: "text",
-          text: `Hello World! I received your message: "${userInput}" (Direct Response)`,
+          text,
         },
       ],
       contextId: requestContext.contextId,
