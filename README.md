@@ -76,5 +76,3 @@ bun run client-test.ts
 bun run client-test.ts
 bun run client-test.ts
 ```
-
-The implementation now demonstrates the full spectrum of A2A communication patterns!

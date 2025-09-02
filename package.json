@@ -12,6 +12,8 @@
   },
   "dependencies": {
     "@a2a-js/sdk": "^0.3.3",
+    "@ai-sdk/openai": "^2.0.23",
+    "ai": "^5.0.29",
     "express": "^5.1.0",
     "uuid": "^11.1.0"
   }
