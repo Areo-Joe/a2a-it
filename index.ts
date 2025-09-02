@@ -20,13 +20,34 @@ import { generateText, streamText, type ModelMessage } from "ai";
 import { zhiPuAI } from "./ai";
 import z from "zod";
 
-// 1. Define your agent's identity card.
-const helloWorldAgentCard: AgentCard = {
-  name: "Hello World Agent",
-  description: "A simple agent that responds with Hello World messages.",
+interface ToolCall {
+  input: unknown;
+  toolCallId: string;
+  toolName: string;
+}
+
+const allowedToolCallsSchema = z.object({
+  allowedToolCalls: z.array(z.string()),
+});
+
+const log = {
+  info: (...args: any[]) => {
+    console.info("[WeatherAgent]", ...args);
+  },
+  error: (...args: any[]) => {
+    console.error("[WeatherAgent]", ...args);
+  },
+  log: (...args: any[]) => {
+    console.log("[WeatherAgent]", ...args);
+  },
+};
+
+const weatherAgentCard: AgentCard = {
+  name: "Weather Agent",
+  description: "A simple agent that responds with weather messages.",
   protocolVersion: "0.3.0",
   version: "1.0.0",
-  url: "http://localhost:3000/", // The public URL of your agent server
+  url: "http://localhost:3000/",
   capabilities: {
     streaming: true,
     pushNotifications: false,
@@ -36,40 +57,30 @@ const helloWorldAgentCard: AgentCard = {
   defaultOutputModes: ["text/plain"],
   skills: [
     {
-      id: "hello_world",
-      name: "Hello World Response",
-      description: "Responds with Hello World to any message",
-      tags: ["hello", "world", "greeting"],
+      id: "weather",
+      name: "Weather Response",
+      description: "Responds with weather to any message",
+      tags: ["weather"],
     },
   ],
 };
 
-// 2. Implement the agent's logic.
-class HelloWorldAgentExecutor implements AgentExecutor {
-  private activeTasks = new Set<string>();
-
+class WeatherAgentExecutor implements AgentExecutor {
   async execute(
     requestContext: RequestContext,
     eventBus: ExecutionEventBus
   ): Promise<void> {
     if (requestContext.task) {
+      log.log(`📋 Task detected, handling as allowing tool calls`);
       await this.handleAsExistingTask(requestContext, eventBus);
       return;
     }
 
-    const userMessage = requestContext.userMessage;
-    const userInput = userMessage.parts
-      .filter((part) => part.kind === "text")
-      .map((part) => part.text)
-      .join(" ");
-
-    console.log(`[HelloWorldAgent] Processing: "${userInput}"`);
-
-    if (await isWeatherQuery(userInput)) {
-      // if is weather query, create a task
+    if (await isWeatherQuery(requestContext)) {
+      log.log(`📋 Creating a new task to handle weather query`);
       await this.handleAsTask(requestContext, eventBus);
     } else {
-      // if not weather query, send a direct message
+      log.log(`📋 Creating a simple message to handle non-weather query`);
       await this.handleAsDirectMessage(requestContext, eventBus);
     }
   }
@@ -78,21 +89,13 @@ class HelloWorldAgentExecutor implements AgentExecutor {
     requestContext: RequestContext,
     eventBus: ExecutionEventBus
   ): Promise<void> {
-    const userInput = requestContext.userMessage.parts
-      .filter((part) => part.kind === "text")
-      .map((part) => part.text)
-      .join(" ");
-
-    console.log(`[HelloWorldAgent] 📨 Handling as direct message`);
-
     const { text } = await generateText({
       model: zhiPuAI("glm-4.5"),
       system:
-        "你是一个天气助手，现在用户说了一句无关的话，你需要指导用户问你天气相关的问题",
-      prompt: userInput,
+        "You are a weather assistant. Now that the user has said something irrelevant, you need to guide the user to ask you weather-related questions.",
+      prompt: extractText(requestContext),
     });
 
-    // Create a direct message response.
     const responseMessage: Message = {
       kind: "message",
       messageId: uuidv4(),
@@ -106,27 +109,18 @@ class HelloWorldAgentExecutor implements AgentExecutor {
       contextId: requestContext.contextId,
     };
 
-    // Publish the message and signal that the interaction is finished.
     eventBus.publish(responseMessage);
     eventBus.finished();
 
-    console.log(`[HelloWorldAgent] ✅ Direct message sent`);
+    log.log(`✅ Direct message sent`);
   }
 
   private async handleAsTask(
     requestContext: RequestContext,
     eventBus: ExecutionEventBus
   ): Promise<void> {
-    const userInput = requestContext.userMessage.parts
-      .filter((part) => part.kind === "text")
-      .map((part) => part.text)
-      .join(" ");
-
-    console.log(`[HelloWorldAgent] 📋 Handling as task`);
-
     const { contextId, taskId } = requestContext;
 
-    // 1. Create and publish initial task
     const initialTask: Task = {
       kind: "task",
       id: taskId,
@@ -141,25 +135,21 @@ class HelloWorldAgentExecutor implements AgentExecutor {
 
     const stream = streamText({
       model: zhiPuAI("glm-4.5"),
-      prompt: userInput,
+      prompt: extractText(requestContext),
       tools: {
         getWeather: {
           name: "getWeather",
           inputSchema: z.object({
             city: z.string(),
           }),
-          description: "获取指定城市的天气信息",
+          description: "Get weather information for a specified city",
         },
       },
     });
 
     const artifactId = uuidv4();
 
-    const awaitedToolCalls: Array<{
-      input: unknown;
-      toolCallId: string;
-      toolName: string;
-    }> = [];
+    const awaitedToolCalls: Array<ToolCall> = [];
 
     for await (let chunk of stream.fullStream) {
       if (chunk.type === "text-delta") {
@@ -194,6 +184,7 @@ class HelloWorldAgentExecutor implements AgentExecutor {
 
       eventBus.publish(statusUpdate);
     } else {
+      // Need to wait for the user to allow the tool calls
       const statusUpdate: TaskStatusUpdateEvent = {
         contextId,
         taskId,
@@ -218,8 +209,6 @@ class HelloWorldAgentExecutor implements AgentExecutor {
       };
       eventBus.publish(statusUpdate);
     }
-
-    console.log(`[HelloWorldAgent] ✅ Task ${taskId} completed`);
   }
 
   private async handleAsExistingTask(
@@ -229,21 +218,13 @@ class HelloWorldAgentExecutor implements AgentExecutor {
     const task = requestContext.task!;
     const { taskId, contextId } = requestContext;
 
-    const userConfirmSchema = z.object({
-      allowedToolCalls: z.array(z.string()),
-    });
-
-    const { allowedToolCalls } = userConfirmSchema.parse(
+    const { allowedToolCalls } = allowedToolCallsSchema.parse(
       (requestContext.userMessage.parts[0] as DataPart).data
     );
 
     const { awaitedToolCalls } = (task.status.message!.parts[0] as DataPart)
       .data as {
-      awaitedToolCalls: {
-        input: unknown;
-        toolCallId: string;
-        toolName: string;
-      }[];
+      awaitedToolCalls: ToolCall[];
     };
 
     const stillAwaited = awaitedToolCalls.filter(
@@ -257,6 +238,7 @@ class HelloWorldAgentExecutor implements AgentExecutor {
       }));
 
     if (stillAwaited.length === 0) {
+      // No more tool calls to wait for, we can complete the task, call LLM
       const workingStatusUpdate: TaskStatusUpdateEvent = {
         kind: "status-update",
         taskId,
@@ -324,8 +306,6 @@ class HelloWorldAgentExecutor implements AgentExecutor {
         ...toolCallMessages,
       ];
 
-      console.log(`Message ${JSON.stringify(messages, null, 2)}`);
-
       const stream = streamText({
         model: zhiPuAI("glm-4.5"),
         messages,
@@ -360,6 +340,7 @@ class HelloWorldAgentExecutor implements AgentExecutor {
 
       eventBus.publish(completedStatusUpdate);
     } else {
+      // Still waiting for some tool calls to be executed
       const statusUpdate: TaskStatusUpdateEvent = {
         kind: "status-update",
         taskId,
@@ -388,16 +369,15 @@ class HelloWorldAgentExecutor implements AgentExecutor {
     }
   }
 
-  async cancelTask(taskId: string, eventBus: ExecutionEventBus): Promise<void> {
-    console.log(`[HelloWorldAgent] 🛑 Cancelling task: ${taskId}`);
-    this.activeTasks.delete(taskId);
-  }
+  async cancelTask(
+    taskId: string,
+    eventBus: ExecutionEventBus
+  ): Promise<void> {}
 }
 
-// 3. Set up and run the server.
-const agentExecutor = new HelloWorldAgentExecutor();
+const agentExecutor = new WeatherAgentExecutor();
 const requestHandler = new DefaultRequestHandler(
-  helloWorldAgentCard,
+  weatherAgentCard,
   new InMemoryTaskStore(),
   agentExecutor
 );
@@ -406,7 +386,14 @@ const appBuilder = new A2AExpressApp(requestHandler);
 const expressApp = appBuilder.setupRoutes(express());
 
 expressApp.listen(3000, () => {
-  console.log(`🚀 Hello World A2A Server started on http://localhost:3000`);
-  console.log(`📋 Agent Card: http://localhost:3000/.well-known/agent.json`);
-  console.log(`🛑 Press Ctrl+C to stop the server`);
+  log.log(`🚀 Weather A2A Server started on http://localhost:3000`);
+  log.log(`📋 Agent Card: http://localhost:3000/.well-known/agent-card.json`);
+  log.log(`🛑 Press Ctrl+C to stop the server`);
 });
+
+function extractText(requestContext: RequestContext) {
+  return requestContext.userMessage.parts
+    .filter((part) => part.kind === "text")
+    .map((part) => part.text)
+    .join("");
+}
