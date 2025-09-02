@@ -9,6 +9,7 @@
         "ai": "^5.0.29",
         "express": "^5.1.0",
         "uuid": "^11.1.0",
+        "zod": "^4.1.5",
       },
       "devDependencies": {
         "@types/bun": "latest",
