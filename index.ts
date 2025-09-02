@@ -20,6 +20,9 @@ import { generateText } from "ai";
 const WEATHER_TRUE = "WEATHER_QUERY_DETECTED_2024";
 const WEATHER_FALSE = "NOT_WEATHER_QUERY_2024";
 
+// 天气工具 - city 参数
+const getWeather = (city: string) => `城市: ${city}, 温度: 22°C, 天气: 晴`;
+
 // 天气判断函数 - 使用智谱AI判断是否是天气查询
 async function isWeatherQuery(userInput: string): Promise<boolean> {
   try {
@@ -33,13 +36,13 @@ async function isWeatherQuery(userInput: string): Promise<boolean> {
 如果用户在询问天气信息，请回答：${WEATHER_TRUE}
 如果用户没有在询问天气信息，请回答：${WEATHER_FALSE}
 
-请严格按照上述格式回答，不要添加任何其他内容。`
+请严格按照上述格式回答，不要添加任何其他内容。`,
         },
         {
           role: "user",
-          content: userInput
-        }
-      ]
+          content: userInput,
+        },
+      ],
     });
 
     const result = response.text?.trim() || "";
