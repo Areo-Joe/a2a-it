@@ -113,14 +113,6 @@ flowchart TD
     R --> S[Stream Final Response]
     S --> T[Task State: Completed]
     T --> U[End]
-
-    style A fill:#e1f5fe
-    style B fill:#fff3e0
-    style C fill:#fff3e0
-    style G fill:#c8e6c9
-    style P fill:#c8e6c9
-    style D fill:#f3e5f5
-    style T fill:#c8e6c9
 ```
 
 ### Workflow Breakdown
