@@ -180,7 +180,7 @@ function InputForm({
             render={({ field }) => (
               <FormItem className="flex-1">
                 <FormControl>
-                  <Input placeholder="Input a weather query..." {...field} />
+                  <Input placeholder="Input a weather query..." {...field} autoComplete="off" />
                 </FormControl>
                 <FormMessage />
               </FormItem>
