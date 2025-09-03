@@ -44,7 +44,6 @@ async function askWeather() {
   for await (const event of stream) {
     eventCount++;
 
-    // 处理不同的流事件类型
     if (event.kind === "task") {
       const taskEvent = event;
       console.log(`📋 Task created: ${taskEvent.id}`);
