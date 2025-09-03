@@ -1,12 +1,6 @@
 "use client";
 
 import "./index.css";
-import {
-  Card,
-  CardContent,
-  CardFooter,
-  CardHeader,
-} from "@/components/ui/card";
 import { A2AClient } from "@a2a-js/sdk/client";
 import { useState } from "react";
 import { Button } from "./components/ui/button";
@@ -15,6 +9,16 @@ import { useA2A, useA2AClient } from "./useA2A";
 import { Badge } from "@/components/ui/badge";
 import { Message, MessageContent } from "./components/message";
 import { Tool, ToolContent, ToolHeader, ToolInput } from "./components/tool";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormMessage,
+} from "@/components/ui/form";
 
 function EnsureClient() {
   const { client, loading } = useA2AClient();
@@ -75,6 +79,22 @@ function AppContent({ client }: { client: A2AClient }) {
                       </ToolContent>
                     </Tool>
                   ))}
+                  {message.awaitedToolCalls.length > 0 && (
+                    <Button
+                      variant="outline"
+                      onClick={() =>
+                        allowToolCall({
+                          taskId: message.taskId,
+                          contextId: message.contextId,
+                          allowedToolCalls: message.awaitedToolCalls.map(
+                            (x) => x.toolCallId
+                          ),
+                        })
+                      }
+                    >
+                      Allow
+                    </Button>
+                  )}
                 </MessageContent>
               </Message>
             </>
@@ -126,58 +146,50 @@ function AppContent({ client }: { client: A2AClient }) {
           );
         }
       })}
-      {lastMessage &&
-        (lastMessage.kind === "agent-create-task" ||
-          lastMessage.kind === "agent-update-task") &&
-        lastMessage.awaitedToolCalls.length > 0 && (
-          <Message from="user">
-            <Card>
-              <CardHeader></CardHeader>
-              {lastMessage.awaitedToolCalls.map((tool) => (
-                <CardContent>
-                  <Tool defaultOpen={false}>
-                    <ToolHeader
-                      type={tool.toolName}
-                      state={"input-available" as const}
-                      badge={
-                        <Badge className="gap-1.5 rounded-full text-xs">
-                          awaited
-                        </Badge>
-                      }
-                    />
-                    <ToolInput input={tool.input} />
-                  </Tool>
-                </CardContent>
-              ))}
-              <CardFooter className="flex justify-center">
-                <Button
-                  variant="outline"
-                  onClick={() =>
-                    allowToolCall({
-                      contextId: lastMessage.contextId,
-                      taskId: lastMessage.taskId,
-                      allowedToolCalls: lastMessage.awaitedToolCalls.map(
-                        (x) => x.toolCallId
-                      ),
-                    })
-                  }
-                >
-                  Allow
-                </Button>
-              </CardFooter>
-            </Card>
-          </Message>
-        )}
 
-      <div className="flex gap-2">
-        <Input
-          placeholder="Input a weather query..."
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-        />
-        <Button onClick={() => sendMessage(input)}>Send</Button>
-      </div>
+      <InputForm sendMessage={(x) => sendMessage(x)} />
     </div>
+  );
+}
+
+const FormSchema = z.object({
+  message: z.string(),
+});
+function InputForm({
+  sendMessage,
+}: {
+  sendMessage: (message: string) => unknown;
+}) {
+  const form = useForm<z.infer<typeof FormSchema>>({
+    resolver: zodResolver(FormSchema),
+    defaultValues: {
+      message: "",
+    },
+  });
+  function onSubmit(data: z.infer<typeof FormSchema>) {
+    sendMessage(data.message);
+    form.reset();
+  }
+  return (
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="w-full">
+        <div className="flex gap-2 items-end">
+          <FormField
+            control={form.control}
+            name="message"
+            render={({ field }) => (
+              <FormItem className="flex-1">
+                <FormControl>
+                  <Input placeholder="Input a weather query..." {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <Button type="submit">Send</Button>
+        </div>
+      </form>
+    </Form>
   );
 }
 
