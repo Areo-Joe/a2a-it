@@ -5,7 +5,8 @@
   "private": true,
   "scripts": {
     "s": "bun server/index.ts",
-    "c": "bun server/index.ts"
+    "c": "bun server/index.ts",
+    "build:s": "bun build server/index.ts --outfile server/dist/index.js --target node"
   },
   "devDependencies": {
     "@types/bun": "latest",

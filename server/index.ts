@@ -32,12 +32,15 @@ const allowedToolCallsSchema = z.object({
   allowedToolCalls: z.array(z.string()),
 });
 
+const AGENT_CARD_URL =
+  process.env.AGENT_CARD_URL || "http://localhost:3000/api";
+
 const weatherAgentCard: AgentCard = {
   name: "Weather Agent",
   description: "A simple agent that responds with weather messages.",
   protocolVersion: "0.3.0",
   version: "1.0.0",
-  url: "http://localhost:3000/",
+  url: AGENT_CARD_URL,
   capabilities: {
     streaming: true,
     pushNotifications: false,
@@ -375,10 +378,14 @@ const requestHandler = new DefaultRequestHandler(
 );
 
 const appBuilder = new A2AExpressApp(requestHandler);
-const expressApp = appBuilder.setupRoutes(express(), "", [cors()]);
+const expressApp = appBuilder.setupRoutes(
+  express(),
+  new URL(AGENT_CARD_URL).pathname,
+  [cors()]
+);
 
 expressApp.listen(3000, () => {
-  log.log(`🚀 Weather A2A Server started on http://localhost:3000`);
-  log.log(`📋 Agent Card: http://localhost:3000/.well-known/agent-card.json`);
+  log.log(`🚀 Weather A2A Server started on ${AGENT_CARD_URL}`);
+  log.log(`📋 Agent Card: ${AGENT_CARD_URL}/.well-known/agent-card.json`);
   log.log(`🛑 Press Ctrl+C to stop the server`);
 });
