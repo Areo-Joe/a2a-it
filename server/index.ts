@@ -1,4 +1,3 @@
-import express from "express";
 import { v4 as uuidv4 } from "uuid";
 import type {
   AgentCard,
@@ -14,13 +13,11 @@ import {
   InMemoryTaskStore,
 } from "@a2a-js/sdk/server";
 import type { AgentExecutor, ExecutionEventBus } from "@a2a-js/sdk/server";
-import { A2AExpressApp } from "@a2a-js/sdk/server/express";
 import { getWeather, isWeatherQuery } from "./weather";
 import { generateText, streamText, type ModelMessage } from "ai";
 import { zhiPuAI } from "./ai";
 import z from "zod";
 import { extractText, log } from "./util";
-import cors from "cors";
 
 interface ToolCall {
   input: unknown;
@@ -32,7 +29,7 @@ const allowedToolCallsSchema = z.object({
   allowedToolCalls: z.array(z.string()),
 });
 
-const AGENT_CARD_URL =
+export const AGENT_CARD_URL =
   process.env.AGENT_CARD_URL || "http://localhost:3000/api";
 
 const weatherAgentCard: AgentCard = {
@@ -377,15 +374,4 @@ const requestHandler = new DefaultRequestHandler(
   agentExecutor
 );
 
-const appBuilder = new A2AExpressApp(requestHandler);
-const expressApp = appBuilder.setupRoutes(
-  express(),
-  new URL(AGENT_CARD_URL).pathname,
-  [cors()]
-);
-
-expressApp.listen(3000, () => {
-  log.log(`🚀 Weather A2A Server started on ${AGENT_CARD_URL}`);
-  log.log(`📋 Agent Card: ${AGENT_CARD_URL}/.well-known/agent-card.json`);
-  log.log(`🛑 Press Ctrl+C to stop the server`);
-});
+export { requestHandler };

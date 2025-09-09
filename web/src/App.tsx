@@ -2,7 +2,6 @@
 
 import "./index.css";
 import { A2AClient } from "@a2a-js/sdk/client";
-import { useState } from "react";
 import { Button } from "./components/ui/button";
 import { Input } from "./components/ui/input";
 import { useA2A, useA2AClient } from "./useA2A";
@@ -30,9 +29,6 @@ function EnsureClient() {
 
 function AppContent({ client }: { client: A2AClient }) {
   const { uiMessages, sendMessage, allowToolCall } = useA2A(client);
-  const [input, setInput] = useState("");
-
-  const lastMessage = uiMessages[uiMessages.length - 1];
 
   return (
     <div className="flex flex-col gap-2 max-w-3xl min-w-3xl">
@@ -180,7 +176,11 @@ function InputForm({
             render={({ field }) => (
               <FormItem className="flex-1">
                 <FormControl>
-                  <Input placeholder="Input a weather query..." {...field} autoComplete="off" />
+                  <Input
+                    placeholder="Input a weather query..."
+                    {...field}
+                    autoComplete="off"
+                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>

@@ -4,9 +4,9 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "s": "bun server/index.ts",
+    "s": "bun server/express.ts",
     "c": "bun server/index.ts",
-    "build:s": "bun build server/index.ts --outfile server/dist/index.js --target node"
+    "build": "cd web && bun run build"
   },
   "devDependencies": {
     "@types/bun": "latest",

@@ -72,9 +72,7 @@ export function useA2AClient() {
   const [client, setClient] = useState<A2AClient | null>(null);
 
   useEffect(() => {
-    A2AClient.fromCardUrl(
-      "http://localhost:3000/.well-known/agent-card.json"
-    ).then((client) => {
+    A2AClient.fromCardUrl("/api/.well-known/agent-card.json").then((client) => {
       setClient(client);
       setLoading(false);
     });
